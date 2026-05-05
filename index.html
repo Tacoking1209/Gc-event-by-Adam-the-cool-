@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>GC Arena Game</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    body {
+      margin: 0;
+      background: #111;
+      overflow: hidden;
+      font-family: Arial;
+      color: white;
+      text-align: center;
+    }
+
+    canvas {
+      display: none;
+      background: #222;
+      width: 100vw;
+      height: 70vh;
+    }
+
+    #menu {
+      margin-top: 50px;
+    }
+
+    .charBtn {
+      padding: 15px;
+      margin: 10px;
+      background: #444;
+      border: none;
+      color: white;
+      font-size: 18px;
+      border-radius: 10px;
+    }
+
+    #controls {
+      position: fixed;
+      bottom: 10px;
+      width: 100%;
+      display: none;
+      justify-content: space-between;
+      padding: 10px;
+    }
+
+    .btn {
+      font-size: 18px;
+      padding: 20px;
+      border-radius: 15px;
+      background: #444;
+      color: white;
+      border: none;
+    }
+  </style>
+</head>
+<body>
+
+<div id="menu">
+  <h1>Choose Your Character</h1>
+  <p id="hoverName" style="font-size:20px; height:30px;"></p>
+
+  <button class="charBtn"
+    ontouchstart="showName('Player 1')"
+    ontouchend="selectChar('player1.jpg')"
+    onclick="selectChar('player1.jpg')">
+    Player 1
+  </button>
+
+  <button class="charBtn"
+    ontouchstart="showName('Player 2')"
+    ontouchend="selectChar('player2.jpg')"
+    onclick="selectChar('player2.jpg')">
+    Player 2
+  </button>
+
+  <button class="charBtn"
+    ontouchstart="showName('Player 3')"
+    ontouchend="selectChar('player3.jpeg')"
+    onclick="selectChar('player3.jpeg')">
+    Player 3
+  </button>
+</div>
+
+<canvas id="game"></canvas>
+
+<div id="controls">
+  <div>
+    <button class="btn" ontouchstart="left=true" ontouchend="left=false">⬅</button>
+    <button class="btn" ontouchstart="right=true" ontouchend="right=false">➡</button>
+  </div>
+  <button class="btn" ontouchstart="jump()">⬆</button>
+</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+canvas.width = 600;
+canvas.height = 400;
+
+// --- IMAGES ---
+let playerImg = new Image();
+let playerLoaded = false;
+
+const enemyImg = new Image();
+let enemyLoaded = false;
+
+enemyImg.src = "enemy.png";
+enemyImg.onload = () => enemyLoaded = true;
+
+// --- GAME STATE ---
+let player, enemies, score, gameOver;
+let left = false, right = false;
+let highScore = 0;
+let selected = false;
+
+// --- UI ---
+function showName(name) {
+  document.getElementById("hoverName").textContent = name;
+}
+
+function hideName() {
+  document.getElementById("hoverName").textContent = "";
+}
+
+function selectChar(img) {
+  if (selected) return;
+  selected = true;
+  hideName();
+  startGame(img);
+}
+
+// --- START GAME ---
+function startGame(imgSrc) {
+  document.getElementById("menu").style.display = "none";
+  canvas.style.display = "block";
+  document.getElementById("controls").style.display = "flex";
+
+  highScore = localStorage.getItem("highScore") || 0;
+
+  playerLoaded = false;
+  playerImg = new Image();
+  playerImg.src = imgSrc;
+
+  playerImg.onload = () => playerLoaded = true;
+  playerImg.onerror = () => console.log("Failed:", imgSrc);
+
+  player = {
+    x: 300,
+    y: 300,
+    w: 40,
+    h: 40,
+    dx: 0,
+    dy: 0,
+    grounded: false
+  };
+
+  enemies = [];
+  score = 0;
+  gameOver = false;
+}
+
+// --- CONTROLS ---
+function jump() {
+  if (!player) return;
+
+  if (player.grounded && !gameOver) {
+    player.dy = -10;
+  } else if (gameOver) {
+    restart();
+  }
+}
+
+// --- ENEMIES ---
+function spawnEnemy() {
+  if (gameOver || !player) return;
+
+  let side = Math.random() < 0.5 ? 0 : canvas.width;
+
+  enemies.push({
+    x: side,
+    y: 300,
+    w: 40,
+    h: 40,
+    dx: 0,
+    dy: 0
+  });
+}
+
+setInterval(spawnEnemy, 1200);
+
+// --- UPDATE ---
+function update() {
+  if (gameOver || !player) return;
+
+  if (left) player.dx = -4;
+  else if (right) player.dx = 4;
+  else player.dx = 0;
+
+  player.x += player.dx;
+
+  player.dy += 0.5;
+  player.y += player.dy;
+
+  if (player.y + player.h > 350) {
+    player.y = 350 - player.h;
+    player.dy = 0;
+    player.grounded = true;
+  } else {
+    player.grounded = false;
+  }
+
+  enemies.forEach(e => {
+    e.dx = e.x < player.x ? 2 : -2;
+    e.x += e.dx;
+
+    if (Math.random() < 0.01 && e.dy === 0) {
+      e.dy = -8;
+    }
+
+    e.dy += 0.5;
+    e.y += e.dy;
+
+    if (e.y + e.h > 350) {
+      e.y = 350 - e.h;
+      e.dy = 0;
+    }
+  });
+
+  enemies.forEach((e, i) => {
+    if (
+      player.x < e.x + e.w &&
+      player.x + player.w > e.x &&
+      player.y < e.y + e.h &&
+      player.y + player.h > e.y
+    ) {
+      if (player.dy > 0 && player.y < e.y) {
+        enemies.splice(i, 1);
+        player.dy = -8;
+        score++;
+      } else {
+        gameOver = true;
+
+        if (score > highScore) {
+          highScore = score;
+          localStorage.setItem("highScore", highScore);
+        }
+      }
+    }
+  });
+}
+
+// --- DRAW ---
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (!player) return;
+
+  let drawW = player.w;
+  let drawH = player.h;
+
+  if (playerLoaded) {
+    let ratio = playerImg.width / playerImg.height;
+
+    if (ratio > 1) drawH = player.w / ratio;
+    else drawW = player.h * ratio;
+
+    let drawX = player.x + (player.w - drawW) / 2;
+    let drawY = player.y + (player.h - drawH) / 2;
+
+    ctx.drawImage(playerImg, drawX, drawY, drawW, drawH);
+  } else {
+    ctx.fillStyle = "lime";
+    ctx.fillRect(player.x, player.y, player.w, player.h);
+  }
+
+  enemies.forEach(e => {
+    if (enemyLoaded) {
+      ctx.drawImage(enemyImg, e.x, e.y, e.w, e.h);
+    } else {
+      ctx.fillStyle = "red";
+      ctx.fillRect(e.x, e.y, e.w, e.h);
+    }
+  });
+
+  ctx.fillStyle = "white";
+  ctx.fillRect(0, 350, canvas.width, 5);
+
+  ctx.fillStyle = "white";
+  ctx.font = "20px Arial";
+  ctx.fillText("Score: " + score, 10, 30);
+  ctx.fillText("High: " + highScore, 10, 55);
+
+  if (gameOver) {
+    ctx.fillText("GAME OVER", 220, 200);
+    ctx.fillText("Tap Jump to Restart", 180, 230);
+  }
+}
+
+// --- RESTART ---
+function restart() {
+  enemies = [];
+  score = 0;
+  gameOver = false;
+  player.x = 300;
+  player.y = 300;
+}
+
+// --- LOOP ---
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+
+</body>
+</html>
